@@ -97,16 +97,21 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getSaveFileName(self, 'Choose Data File Path', r"d:", 'CSV Files (*.csv);;All Files (*)', options=options)
-
-        intensity_data = pd.Series(self.intensity_data, name='Intensity')
-        intensity_data.to_csv(file_path, index=False, header=True)
+        startFreq = int(self.start_freq_spbx.value())
+        stopFreq = int(self.stop_freq_spbx.value())
+        stepFreq = int(self.step_freq_spbx.value())
+        intensity_data = self.intensity_data
+        
+        frequency_data = range(startFreq,stopFreq+stepFreq,stepFreq)
+        df = pd.DataFrame({'Frequency': frequency_data, 'Intensity': intensity_data})
+        df.to_csv(file_path, index=False, header=True)
     def plot_result(self):
         self.cw_odmr_plot.clear()
         startFreq = int(self.start_freq_spbx.value())
         stopFreq = int(self.stop_freq_spbx.value())
         stepFreq = int(self.step_freq_spbx.value())
         num_points = int((stopFreq - startFreq)/stepFreq) + 1
-        freq_data = range(startFreq,stopFreq+1,stepFreq)
+        freq_data = range(startFreq,stopFreq+stepFreq,stepFreq)
         curve = self.cw_odmr_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
         
         self.intensity_data += np.array(self.cw_odmr_data[0:num_points])
