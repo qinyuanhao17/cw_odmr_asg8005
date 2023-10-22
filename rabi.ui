@@ -889,6 +889,47 @@ QPushButton:pressed {
              </item>
             </layout>
            </widget>
+           <widget class="QGroupBox" name="groupBox_3">
+            <property name="geometry">
+             <rect>
+              <x>10</x>
+              <y>840</y>
+              <width>211</width>
+              <height>91</height>
+             </rect>
+            </property>
+            <property name="title">
+             <string>Clear</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout">
+             <item>
+              <widget class="QPushButton" name="clear_repeat_count_btn">
+               <property name="styleSheet">
+                <string notr="true">QPushButton{
+	font: 10pt &quot;Yu Gothic UI&quot;;	
+
+}</string>
+               </property>
+               <property name="text">
+                <string>ClearRepeatCount</string>
+               </property>
+               <property name="icon">
+                <iconset resource="resources.qrc">
+                 <normaloff>:/my_icons/images/icons/restore.svg</normaloff>:/my_icons/images/icons/restore.svg</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>20</width>
+                 <height>25</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
           </widget>
          </item>
         </layout>

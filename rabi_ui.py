@@ -466,6 +466,23 @@ class Ui_Form(object):
         self.verticalLayout_3.addWidget(self.groupBox_11)
         self.verticalLayout_3.setStretch(0, 5)
         self.verticalLayout_3.setStretch(1, 1)
+        self.groupBox_3 = QtWidgets.QGroupBox(self.frame_2)
+        self.groupBox_3.setGeometry(QtCore.QRect(10, 840, 211, 91))
+        self.groupBox_3.setCheckable(True)
+        self.groupBox_3.setObjectName("groupBox_3")
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self.groupBox_3)
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.clear_repeat_count_btn = QtWidgets.QPushButton(self.groupBox_3)
+        self.clear_repeat_count_btn.setStyleSheet("QPushButton{\n"
+"    font: 10pt \"Yu Gothic UI\";    \n"
+"\n"
+"}")
+        icon11 = QtGui.QIcon()
+        icon11.addPixmap(QtGui.QPixmap(":/my_icons/images/icons/restore.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.clear_repeat_count_btn.setIcon(icon11)
+        self.clear_repeat_count_btn.setIconSize(QtCore.QSize(20, 25))
+        self.clear_repeat_count_btn.setObjectName("clear_repeat_count_btn")
+        self.horizontalLayout.addWidget(self.clear_repeat_count_btn)
         self.verticalLayout.addWidget(self.frame_2)
         self.verticalLayout_5.addWidget(self.mainframe)
         self.verticalLayout_19.addWidget(self.mainwidget)
@@ -503,4 +520,6 @@ class Ui_Form(object):
         self.groupBox_10.setTitle(_translate("Form", "RepeatCount"))
         self.label_13.setText(_translate("Form", "Repeat Count:"))
         self.groupBox_11.setTitle(_translate("Form", "Data Processing Info"))
+        self.groupBox_3.setTitle(_translate("Form", "Clear"))
+        self.clear_repeat_count_btn.setText(_translate("Form", "ClearRepeatCount"))
 import resources_rc

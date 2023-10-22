@@ -74,6 +74,11 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         self.plot_data_btn.clicked.connect(self.plot_result)
         self.repeat_count_num.valueChanged.connect(self.plot_result)
         self.save_plot_data_btn.clicked.connect(self.save_plot_data)
+
+        # clear all signal
+        self.clear_repeat_count_btn.clicked.connect(self.clear_repeat_count)
+    def clear_all(self):
+        self.repeat_count_num.setValue(0)
     def save_plot_data(self):
         
         options = QFileDialog.Options()
@@ -88,7 +93,7 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         num_points = int(rabiTime/rabiStep)
         time_span = range(rabiStep,rabiTime+50,rabiStep)
         curve = self.rabi_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
-        
+
         rabi_data = self.rabi_data
         num_sublists = len(rabi_data) // num_points
         sublists = np.array_split(list[:num_points * num_sublists], num_sublists)
