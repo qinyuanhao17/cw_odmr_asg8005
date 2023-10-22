@@ -1,9 +1,7 @@
 import sys
 import time
-
 import pythoncom
-import pyvisa
-import asg_cw_odmr_ui
+import rabi_ui
 import pandas as pd
 import numpy as np
 import pyqtgraph as pg
@@ -14,9 +12,8 @@ from PyQt5.QtGui import QIcon, QPixmap, QCursor, QColor
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint
 from PyQt5.QtWidgets import QWidget, QApplication, QGraphicsDropShadowEffect, QFileDialog, QDesktopWidget, QVBoxLayout
 
-class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
+class MyWindow(rabi_ui.Ui_Form, QWidget):
 
-    rf_info_msg = pyqtSignal(str)
     asg_info_msg = pyqtSignal(str)
     data_processing_info_msg = pyqtSignal(str)
 
@@ -46,30 +43,14 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         self.window_btn_signal()
 
         '''
-        RF init
-        '''
-        # Init RF combobox ui
-        self.rf_cbx_test()
-        
-        # Init RF setup info ui
-        self.rf_info_ui()
-
-        # Init RF signal
-        self.my_rf_signal()
-
-        '''
         ASG init
         '''
         self.asg_singal_init()
         self.asg_info_ui()
         self.asg_info_msg.connect(self.asg_slot)
         self.m_CountCount = 1
-        self.cw_odmr_data = []
-        startFreq = int(self.start_freq_spbx.value())
-        stopFreq = int(self.stop_freq_spbx.value())
-        stepFreq = int(self.step_freq_spbx.value())
-        num_points = int((stopFreq - startFreq)/stepFreq) + 1
-        self.intensity_data = np.zeros(num_points)
+        self.rabi_data = []
+        
 
 
         '''
@@ -101,18 +82,21 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         intensity_data = pd.Series(self.intensity_data, name='Intensity')
         intensity_data.to_csv(file_path, index=False, header=True)
     def plot_result(self):
-        self.cw_odmr_plot.clear()
-        startFreq = int(self.start_freq_spbx.value())
-        stopFreq = int(self.stop_freq_spbx.value())
-        stepFreq = int(self.step_freq_spbx.value())
-        num_points = int((stopFreq - startFreq)/stepFreq) + 1
-        freq_data = range(startFreq,stopFreq+1,stepFreq)
-        curve = self.cw_odmr_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
+        self.rabi_plot.clear()
+        rabiStep = int(self.rabi_step_spbx.value())
+        rabiTime = int(self.rabi_time_spbx.value())
+        num_points = int(rabiTime/rabiStep)
+        time_span = range(rabiStep,rabiTime+50,rabiStep)
+        curve = self.rabi_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
         
-        self.intensity_data += np.array(self.cw_odmr_data[0:num_points])
+        rabi_data = self.rabi_data
+        num_sublists = len(rabi_data) // num_points
+        sublists = np.array_split(list[:num_points * num_sublists], num_sublists)
+        
+        self.intensity_data = np.sum(sublists, axis=0)
         self.intensity_data = list(self.intensity_data)
         
-        curve.setData(freq_data, self.intensity_data)       
+        curve.setData(time_span, self.intensity_data)       
         self.intensity_data = np.array(self.intensity_data)
     def data_processing_info_ui(self):
 
@@ -132,27 +116,27 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         
     def restore_view(self):
         # self.data_processing_info_msg.emit('View restored')
-        self.cw_odmr_plot.getPlotItem().enableAutoRange()
+        self.rabi_plot.getPlotItem().enableAutoRange()
 
     def plot_ui_init(self):
 
         # Add pyqtGraph plot widget        
-        self.cw_odmr_plot = pg.PlotWidget(enableAutoRange=True)
+        self.rabi_plot = pg.PlotWidget(enableAutoRange=True)
         graph_widget_layout = QVBoxLayout()
-        graph_widget_layout.addWidget(self.cw_odmr_plot)
+        graph_widget_layout.addWidget(self.rabi_plot)
         self.graph_frame.setLayout(graph_widget_layout)
-        self.cw_odmr_plot.setLabel("left","Intensity (Counts)")
-        self.cw_odmr_plot.setLabel("bottom","RF Frequency (MHz)")
-        self.cw_odmr_plot.setTitle('CW-ODMR', color='k')
-        self.cw_odmr_plot.setBackground(background=None)
-        self.cw_odmr_plot.getAxis('left').setPen('k')
-        self.cw_odmr_plot.getAxis('left').setTextPen('k')
-        self.cw_odmr_plot.getAxis('bottom').setPen('k')
-        self.cw_odmr_plot.getAxis('bottom').setTextPen('k')
-        self.cw_odmr_plot.getAxis('top').setPen('k')
-        self.cw_odmr_plot.getAxis('right').setPen('k')
-        self.cw_odmr_plot.showAxes(True)
-        self.cw_odmr_plot.showGrid(x=True, y=True)
+        self.rabi_plot.setLabel("left","Intensity (Counts)")
+        self.rabi_plot.setLabel("bottom","Time (ns)")
+        self.rabi_plot.setTitle('Rabi', color='k')
+        self.rabi_plot.setBackground(background=None)
+        self.rabi_plot.getAxis('left').setPen('k')
+        self.rabi_plot.getAxis('left').setTextPen('k')
+        self.rabi_plot.getAxis('bottom').setPen('k')
+        self.rabi_plot.getAxis('bottom').setTextPen('k')
+        self.rabi_plot.getAxis('top').setPen('k')
+        self.rabi_plot.getAxis('right').setPen('k')
+        self.rabi_plot.showAxes(True)
+        self.rabi_plot.showGrid(x=True, y=True)
 
     def asg_singal_init(self):
         self.asg_connect_btn.clicked.connect(self.asg_connect)  
@@ -163,7 +147,7 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
                 self.asg_scroll.verticalScrollBar().maximum()
             )
         )
-        self.mw_time_spbx.editingFinished.connect(self.acq_time_calc)
+        # self.mw_time_spbx.editingFinished.connect(self.acq_time_calc)
         self.asg_set_btn.clicked.connect(self.set_pulse_and_count)
         self.asg_start_btn.clicked.connect(self.asg_start)
         self.asg_stop_btn.clicked.connect(self.asg_stop)
@@ -172,7 +156,7 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         if rtn == 1:
             self.asg_info_msg.emit('Stop success: {}'.format(rtn))
         self.__stopConstant = True
-        self.cw_odmr_data = []
+        self.rabi_data = []
     def asg_start(self):
         rtn = self.asg.start()
         if rtn == 1:
@@ -183,12 +167,35 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         )
         thread.start()
     def set_pulse_and_count(self):
-        # dwell_time = int(self.dwell_time_spbx.value())
-        mw_time = int(self.mw_time_spbx.value())*1000000
-        acq_time = int(self.acq_time_spbx.value())*1000000
+        
+        rabiStep = int(self.rabi_step_spbx.value())
+        rabiTime = int(self.rabi_time_spbx.value())
+        num_points = int(rabiTime/rabiStep)
+        init_time = int(self.init_time_spbx.value())
+        acq_time = int(self.acq_time_spbx.value())*1000
+        
+        self.intensity_data = np.zeros(num_points)
         #ASG
-        ch1 = [0,20+10000000+mw_time+20,1000,20]
-        ch2 = [0, 20+10000000, mw_time, 1000+20+20]
+        ch1 = []
+        ch2 = []
+        count = []
+        for i in range(num_points):
+            ch1.append(init_time)
+            ch1.append(rabiStep*(i+1)+100+acq_time)
+            
+            ch2.append(0)
+            ch2.append(init_time+50)
+            ch2.append(rabiStep*(i+1))
+            ch2.append(50+acq_time)
+
+            count.append(init_time+100+rabiStep*(i+1))
+            count.append(acq_time)
+        ch1.append(0)
+        ch1.append(20)
+        ch2.append(0)
+        ch2.append(20)
+        count.append(20)
+            
         ch3 = [0,0]
         ch4 = [0,0]
         ch5 = [0,0]
@@ -221,7 +228,7 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
             self.asg_info_msg.emit('Count configured: {}'.format(rtn))
 
         # Download count data
-        count_data = [20,10000000, mw_time, 1000+20+20]
+        count_data = count
         self.asg_info_msg.emit('Count: ' + str(count_data))
         self.asg_info_msg.emit('Count SUM: ' + str(sum(count_data)))
         length_count=len(count_data)
@@ -233,35 +240,24 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         
     def count_data_thread_func(self):
         pythoncom.CoInitialize()
-        startFreq = int(self.start_freq_spbx.value())
-        stopFreq = int(self.stop_freq_spbx.value())
-        stepFreq = int(self.step_freq_spbx.value())
-
-        num_points = int((stopFreq - startFreq)/stepFreq) + 1 
+        rabiStep = int(self.rabi_step_spbx.value())
+        rabiTime = int(self.rabi_time_spbx.value())
+        num_points = int(rabiTime/rabiStep)
         repeat_num = int(self.repeat_spbx.value())
         i_count = int(self.repeat_count_num.value())
         
         self.__stopConstant = False
         while True:
-            print(1)
-            
+            rabi_data = self.rabi_data #防止在给i_count赋值的时候self.rabi_data变了
             if self.__stopConstant == True:
                 break
-            if 1 == (len(self.cw_odmr_data) // num_points):                
-                self.repeat_count_num.setValue(i_count+1)
+            if (len(rabi_data) // num_points) != i_count:                
+                self.repeat_count_num.setValue(rabi_data)
             if i_count >= repeat_num:
                 break
             time.sleep(1)
         pythoncom.CoUninitialize()
     
-    def acq_time_calc(self):
-        dwell_time = int(self.dwell_time_spbx.value())
-        mw_time = int(self.mw_time_spbx.value())
-        acq_time = mw_time
-        if mw_time > 0 and mw_time <= dwell_time:
-            self.acq_time_spbx.setValue(acq_time)
-        else:
-            self.asg_info_msg.emit('MWTime should be smaller than DwellTime')
     def asg_connect(self):
         #实例化asg对象
         self.asg = ASG8005()
@@ -315,7 +311,7 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
             typestr = '连续计数 : ' 
         # self.asg_info_msg.emit(typestr + "datList :" + str(datList)) 
         # print(typestr + "datList :" + str(datList))
-        self.cw_odmr_data.append(datList[1])
+        self.rabi_data.append(datList[1:])
 
         return
     '''Set window ui'''
@@ -372,171 +368,6 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         self.m_flag = False
         self.setCursor(QCursor(Qt.ArrowCursor))
 
-    '''
-    RF CONTROL
-    '''
-    def rf_info_ui(self):
-
-        self.rf_msg.setWordWrap(True)  # 自动换行
-        self.rf_msg.setAlignment(Qt.AlignTop)  # 靠上
-        self.rf_msg_history = []
-
-    def rf_slot(self, msg):
-
-        # print(msg)
-        self.rf_msg_history.append(msg)
-        self.rf_msg.setText("<br>".join(self.rf_msg_history))
-        self.rf_msg.resize(700, self.rf_msg.frameSize().height() + 20)
-        self.rf_msg.repaint()  # 更新内容，如果不更新可能没有显示新内容
-
-    def my_rf_signal(self):
-
-        #open button signal
-        self.rf_connect_btn.clicked.connect(self.boot_rf)
-
-        #message signal
-        self.rf_info_msg.connect(self.rf_slot)
-
-        # RF scroll area scrollbar signal
-        self.rf_scroll.verticalScrollBar().rangeChanged.connect(
-            lambda: self.rf_scroll.verticalScrollBar().setValue(
-                self.rf_scroll.verticalScrollBar().maximum()
-            )
-        )
-
-        # combobox restore signal
-        self.rf_visa_rst_btn.clicked.connect(self.rf_cbx_test)
-
-        # RF load sample button signal
-        self.rf_load_btn.clicked.connect(self.rf_spl_ld)
-
-        # RF On button signal
-        self.rf_ply_stp_btn.clicked.connect(self.rf_ply_stp)
-
-    def rf_cbx_test(self):
-        
-        self.rf_cbx.clear()
-        self.rm = pyvisa.ResourceManager()
-        self.ls = self.rm.list_resources()
-        self.rf_cbx.addItems(self.ls)
-
-    def boot_rf(self):
-        
-        # Boot RF generator
-        self.rf_port = self.rf_cbx.currentText()
-        # print(self.rf_port)
-        self.my_instrument = self.rm.open_resource(self.rf_port)
-        self.my_instrument.write_termination = '\n'
-        self.instrument_info = self.my_instrument.query('*IDN?')
-        
-        # 恢复出厂设置
-        self.fac = self.my_instrument.write(':SYST:PRES:TYPE FAC')
-        
-        self.preset = self.my_instrument.write(':SYST:PRES')
-        
-        if self.fac != 0 and self.preset != 0:
-            self.rf_info_msg.emit('Restored factory settings succeeded: {}, {}'.format(self.fac, self.preset))
-        else:
-            self.rf_info_msg.emit('Restoring factory settings failed')
-            sys.emit()
-
-        self.rf_info_msg.emit(self.instrument_info)
-        
-        '''
-        This part defines some initial settings of RF generator suited to CW-ODMR measurement
-        '''
-        # time.sleep(5)
-
-        # setting sweep type to list
-        sweep_type = self.my_instrument.write(":SWE:TYPE LIST")
-        if sweep_type != 0:
-            self.rf_info_msg.emit('Setting sweep type to "LIST" succeeded: {}'.format(sweep_type))
-        else:
-            self.rf_info_msg.emit('Setting sweep type "LIST" failed')
-            sys.emit()
-
-        # setting file type to sweep csv
-        file_type = self.my_instrument.write(":MMEM:FILE SWPCsv")
-        if file_type != 0:
-            self.rf_info_msg.emit('Setting file type to "SWPCsv" succeeded: {}'.format(file_type))
-        else:
-            self.rf_info_msg.emit('Setting file type "SWPCsv" failed')
-            sys.emit()
-        
-        # setting sweep mode to continue
-        sweep_mode = self.my_instrument.write(":SWE:MODE CONT")
-        if sweep_mode != 0:
-            self.rf_info_msg.emit('Setting sweep mode to "CONTinue" succeeded: {}'.format(sweep_mode))
-        else:
-            self.rf_info_msg.emit('Setting sweep mode to "CONTinue"failed')
-            sys.emit()
-        
-        # setting period trigger type to auto
-        pe_sweep_trig = self.my_instrument.write(":SWE:SWE:TRIG:TYPE AUTO")
-        if pe_sweep_trig != 0:
-            self.rf_info_msg.emit('Setting period trigger type TO "AUTO" succeeded: {}'.format(pe_sweep_trig))
-        else:
-            self.rf_info_msg.emit('Setting period trigger type "AUTO" failed')
-            sys.emit()
-
-        #setting poit trigger type to external
-        pt_sweep_trig = self.my_instrument.write(":SWE:POIN:TRIG:TYPE EXT")
-        if pt_sweep_trig != 0:
-            self.rf_info_msg.emit('Setting point trigger type to "EXT" succeeded: {}'.format(pt_sweep_trig))
-        else:
-            self.rf_info_msg.emit('Setting point trigger type "EXT" failed')
-            sys.emit()
-
-        # setting triger_slope to positive
-        trig_slope = self.my_instrument.write(":INP:TRIG:SLOP POS ")
-        if trig_slope != 0:
-            self.rf_info_msg.emit('Setting trigger slope to "Positive" succeeded: {}'.format(trig_slope))
-        else:
-            self.rf_info_msg.emit('Setting trigger slope to "Positive" failed')
-            sys.emit()
-
-        # setting sweep state to level and frequency
-        sweep_state = self.my_instrument.write(":SWE:STAT LEV,FREQ")
-        if sweep_state != 0:
-            self.rf_info_msg.emit('Setting sweep state to "Level and Frequency" succeeded: {}'.format(sweep_state))
-        else:
-            self.rf_info_msg.emit('Setting sweep state to "Level and Frequency" failed')
-            sys.emit()
-
-    def rf_spl_ld(self):
-
-        sample = self.rf_sample_ledit.text()
-        load_status = self.my_instrument.write(':MMEMory:LOAD E:\RF_freqSW_list\cw_odmr\{}.csv'.format(sample))
-        if load_status != 0:
-            self.rf_info_msg.emit('Loading SWPcsv list sample succeeded: {}'.format(load_status))
-        else:
-            self.rf_info_msg.emit('Loading SWPcsv list sample failed')
-
-    def rf_ply_stp(self):
-        output_status = self.my_instrument.query(':OUTP?')
-        if output_status == '0\n':
-            
-            self.rf_ply_stp_btn.setText('RF OFF')
-            self.off_icon = QIcon()
-            self.off_icon.addPixmap(QPixmap(":/my_icons/images/icons/stop.svg"), QIcon.Normal, QIcon.Off)
-            self.rf_ply_stp_btn.setIcon(self.off_icon)
-            rtn = self.my_instrument.write(":OUTP ON")
-            if rtn != 0:
-                self.rf_info_msg.emit('RF ON succeeded: {}'.format(rtn))
-            else:
-                self.rf_info_msg.emit('RF ON failed')
-                sys.emit()
-        elif output_status == '1\n':
-            self.rf_ply_stp_btn.setText('RF ON  ')
-            self.on_icon = QIcon()
-            self.on_icon.addPixmap(QPixmap(":/my_icons/images/icons/play.svg"), QIcon.Normal, QIcon.Off)
-            self.rf_ply_stp_btn.setIcon(self.on_icon)
-            rtn = self.my_instrument.write(":OUTP OFF")
-            if rtn != 0:
-                self.rf_info_msg.emit('RF OFF succeeded: {}'.format(rtn))
-            else:
-                self.rf_info_msg.emit('RF OFF failed')
-                sys.emit()
         
 if __name__ == '__main__':
 
