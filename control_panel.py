@@ -89,6 +89,10 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         self.plot_data_btn.clicked.connect(self.plot_result)
         self.repeat_count_num.valueChanged.connect(self.plot_result)
         self.save_plot_data_btn.clicked.connect(self.save_plot_data)
+        # clear all signal
+        self.clear_repeat_count_btn.clicked.connect(self.clear_repeat_count)
+    def clear_all(self):
+        self.repeat_count_num.setValue(0)
     def save_plot_data(self):
         
         options = QFileDialog.Options()
