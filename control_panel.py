@@ -1,9 +1,6 @@
 import sys
-import os
 import time
-import platform
-import struct
-import socket
+
 import pythoncom
 import pyvisa
 import asg_cw_odmr_ui
@@ -13,8 +10,8 @@ import pyqtgraph as pg
 from threading import Thread
 from ctypes import *
 from ASG8005_PythonSDK import * 
-from PyQt5.QtGui import QIcon, QPixmap, QCursor, QMouseEvent, QColor, QFont
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QEvent
+from PyQt5.QtGui import QIcon, QPixmap, QCursor, QColor
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint
 from PyQt5.QtWidgets import QWidget, QApplication, QGraphicsDropShadowEffect, QFileDialog, QDesktopWidget, QVBoxLayout
 
 class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
@@ -30,8 +27,8 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
 
         # init UI
         self.setupUi(self)
-        self.ui_width = int(QDesktopWidget().availableGeometry().size().width()*0.56)
-        self.ui_height = int(QDesktopWidget().availableGeometry().size().height()*0.75)
+        self.ui_width = int(QDesktopWidget().availableGeometry().size().width()*0.75)
+        self.ui_height = int(QDesktopWidget().availableGeometry().size().height()*0.88)
         self.resize(self.ui_width, self.ui_height)
         center_pointer = QDesktopWidget().availableGeometry().center()
         x = center_pointer.x()
@@ -68,6 +65,12 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         self.asg_info_msg.connect(self.asg_slot)
         self.m_CountCount = 1
         self.cw_odmr_data = []
+        startFreq = int(self.start_freq_spbx.value())
+        stopFreq = int(self.stop_freq_spbx.value())
+        stepFreq = int(self.step_freq_spbx.value())
+        num_points = int((stopFreq - startFreq)/stepFreq) + 1
+        self.intensity_data = np.zeros(num_points)
+
 
         '''
         Data processing init
@@ -75,6 +78,7 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         self.plot_ui_init()
         self.data_processing_signal()
         self.data_processing_info_ui()
+        
     def data_processing_signal(self):
         self.restore_view_btn.clicked.connect(self.restore_view)
         # Message signal
@@ -88,7 +92,14 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         # plot signal
         self.plot_data_btn.clicked.connect(self.plot_result)
         self.repeat_count_num.valueChanged.connect(self.plot_result)
+        self.save_plot_data_btn.clicked.connect(self.save_plot_data)
+    def save_plot_data(self):
+        
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getSaveFileName(self, 'Choose Data File Path', r"d:", 'CSV Files (*.csv);;All Files (*)', options=options)
 
+        intensity_data = pd.Series(self.intensity_data, name='Intensity')
+        intensity_data.to_csv(file_path, index=False, header=True)
     def plot_result(self):
         self.cw_odmr_plot.clear()
         startFreq = int(self.start_freq_spbx.value())
@@ -97,14 +108,12 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         num_points = int((stopFreq - startFreq)/stepFreq) + 1
         freq_data = range(startFreq,stopFreq+1,stepFreq)
         curve = self.cw_odmr_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
-        i_count = int(self.repeat_count_num.value())
-        self.intensity_data = np.zeros(num_points)
-        for i in range(i_count):
-            self.intensity_data += self.cw_odmr_data[i*num_points:(i+1)*num_points]
+        
+        self.intensity_data += np.array(self.cw_odmr_data[0:num_points])
         self.intensity_data = list(self.intensity_data)
         
         curve.setData(freq_data, self.intensity_data)       
-
+        self.intensity_data = np.array(self.intensity_data)
     def data_processing_info_ui(self):
 
         self.data_processing_msg.setWordWrap(True)  # 自动换行
@@ -163,7 +172,7 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         if rtn == 1:
             self.asg_info_msg.emit('Stop success: {}'.format(rtn))
         self.__stopConstant = True
-        print(self.intensity_data)
+        self.cw_odmr_data = []
     def asg_start(self):
         rtn = self.asg.start()
         if rtn == 1:
@@ -178,14 +187,14 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         mw_time = int(self.mw_time_spbx.value())*1000000
         acq_time = int(self.acq_time_spbx.value())*1000000
         #ASG
-        ch1 = [1000,0]
-        ch2 = [0, 20+10000000, mw_time, acq_time+20]
+        ch1 = [0,20+10000000+mw_time+20,1000,20]
+        ch2 = [0, 20+10000000, mw_time, 1000+20+20]
         ch3 = [0,0]
         ch4 = [0,0]
         ch5 = [0,0]
         ch6 = [0,0]
         ch7 = [0,0]
-        ch8 = [20,10000000+mw_time+20, 100,100,100,100,100,100,100,100,100,100,100, 20]
+        ch8 = [0,0]
 
         asg_data = [ch1,
                 ch2,
@@ -212,7 +221,7 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
             self.asg_info_msg.emit('Count configured: {}'.format(rtn))
 
         # Download count data
-        count_data = [20,10000000+mw_time, acq_time, 20]
+        count_data = [20,10000000, mw_time, 1000+20+20]
         self.asg_info_msg.emit('Count: ' + str(count_data))
         self.asg_info_msg.emit('Count SUM: ' + str(sum(count_data)))
         length_count=len(count_data)
@@ -231,26 +240,25 @@ class MyWindow(asg_cw_odmr_ui.Ui_Form, QWidget):
         num_points = int((stopFreq - startFreq)/stepFreq) + 1 
         repeat_num = int(self.repeat_spbx.value())
         i_count = int(self.repeat_count_num.value())
+        
         self.__stopConstant = False
         while True:
-
+            print(1)
+            
             if self.__stopConstant == True:
                 break
-            if i_count != (len(self.cw_odmr_data) // num_points):
-                print(len(self.cw_odmr_data) // num_points)
-                
-                i_count = len(self.cw_odmr_data) // num_points
-                self.repeat_count_num.setValue(i_count)
+            if 1 == (len(self.cw_odmr_data) // num_points):                
+                self.repeat_count_num.setValue(i_count+1)
             if i_count >= repeat_num:
                 break
-            time.sleep(5)
+            time.sleep(1)
         pythoncom.CoUninitialize()
     
     def acq_time_calc(self):
         dwell_time = int(self.dwell_time_spbx.value())
         mw_time = int(self.mw_time_spbx.value())
-        acq_time = dwell_time - mw_time
-        if acq_time > 0:
+        acq_time = mw_time
+        if mw_time > 0 and mw_time <= dwell_time:
             self.acq_time_spbx.setValue(acq_time)
         else:
             self.asg_info_msg.emit('MWTime should be smaller than DwellTime')
