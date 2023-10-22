@@ -83,15 +83,18 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getSaveFileName(self, 'Choose Data File Path', r"d:", 'CSV Files (*.csv);;All Files (*)', options=options)
-
-        intensity_data = pd.Series(self.intensity_data, name='Intensity')
-        intensity_data.to_csv(file_path, index=False, header=True)
+        rabiStep = int(self.rabi_step_spbx.value())
+        rabiTime = int(self.rabi_time_spbx.value())
+        intensity_data = self.intensity_data
+        time_span = range(rabiStep,rabiTime+rabiStep,rabiStep)
+        df = pd.DataFrame({'Time': time_span, 'Intensity': intensity_data})
+        df.to_csv(file_path, index=False, header=True)
     def plot_result(self):
         self.rabi_plot.clear()
         rabiStep = int(self.rabi_step_spbx.value())
         rabiTime = int(self.rabi_time_spbx.value())
         num_points = int(rabiTime/rabiStep)
-        time_span = range(rabiStep,rabiTime+50,rabiStep)
+        time_span = range(rabiStep,rabiTime+rabiStep,rabiStep)
         curve = self.rabi_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
 
         rabi_data = self.rabi_data
