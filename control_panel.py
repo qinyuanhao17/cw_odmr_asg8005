@@ -77,14 +77,14 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
 
         # clear all signal
         self.clear_repeat_count_btn.clicked.connect(self.clear_repeat_count)
-    def clear_all(self):
+    def clear_repeat_count(self):
         self.repeat_count_num.setValue(0)
     def save_plot_data(self):
         
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getSaveFileName(self, 'Choose Data File Path', r"d:", 'CSV Files (*.csv);;All Files (*)', options=options)
         rabiStep = int(self.rabi_step_spbx.value())
-        rabiTime = int(self.rabi_time_spbx.value())
+        rabiTime = int(self.rabi_time_spbx.value())*1000
         intensity_data = self.intensity_data
         time_span = range(rabiStep,rabiTime+rabiStep,rabiStep)
         df = pd.DataFrame({'Time': time_span, 'Intensity': intensity_data})
@@ -92,17 +92,22 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
     def plot_result(self):
         self.rabi_plot.clear()
         rabiStep = int(self.rabi_step_spbx.value())
-        rabiTime = int(self.rabi_time_spbx.value())
+        rabiTime = int(self.rabi_time_spbx.value())*1000
         num_points = int(rabiTime/rabiStep)
         time_span = range(rabiStep,rabiTime+rabiStep,rabiStep)
         curve = self.rabi_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
 
-        rabi_data = self.rabi_data
-        num_sublists = len(rabi_data) // num_points
-        sublists = np.array_split(list[:num_points * num_sublists], num_sublists)
+        rabi_data = np.array(self.rabi_data)
         
-        self.intensity_data = np.sum(sublists, axis=0)
+        num_sublists = int(self.repeat_count_num.value())
+        # sublists = np.array_split(rabi_data[:(num_points * num_sublists)], num_sublists)
+        # print(sublists)
+        self.intensity_data = np.sum(rabi_data[:num_sublists], axis=0)
+        # for i in range(num_sublists):
+        #     # print(np.array(rabi_data[i*num_points:(i+1)*num_points]))
+        #     self.intensity_data += np.array(rabi_data[i*num_points:(i+1)*num_points])
         self.intensity_data = list(self.intensity_data)
+        # print(self.intensity_data)
         
         curve.setData(time_span, self.intensity_data)       
         self.intensity_data = np.array(self.intensity_data)
@@ -169,6 +174,9 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         rtn = self.asg.start()
         if rtn == 1:
             self.asg_info_msg.emit('Start success: {}'.format(rtn))
+        time.sleep(1)
+        # print(len(self.rabi_data))
+        # print(self.rabi_data)
         # Start daq in thread
         thread = Thread(
             target=self.count_data_thread_func
@@ -177,33 +185,42 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
     def set_pulse_and_count(self):
         
         rabiStep = int(self.rabi_step_spbx.value())
-        rabiTime = int(self.rabi_time_spbx.value())
+        rabiTime = int(self.rabi_time_spbx.value())*1000
         num_points = int(rabiTime/rabiStep)
-        init_time = int(self.init_time_spbx.value())
+        init_time = int(self.init_time_spbx.value())*1000
         acq_time = int(self.acq_time_spbx.value())*1000
         
         self.intensity_data = np.zeros(num_points)
         #ASG
-        ch1 = []
-        ch2 = []
-        count = []
+        ch1 = [0,20,init_time]
+        ch2 = [0,20+init_time+10]
+        count = [20]
+        
         for i in range(num_points):
-            ch1.append(init_time)
-            ch1.append(rabiStep*(i+1)+100+acq_time)
             
-            ch2.append(0)
-            ch2.append(init_time+50)
-            ch2.append(rabiStep*(i+1))
-            ch2.append(50+acq_time)
+            ch1.append(rabiStep*(i+1)+20)
+            if i == num_points - 1:
+                ch1.append(acq_time)
+            else:
+                ch1.append(acq_time+init_time)
 
-            count.append(init_time+100+rabiStep*(i+1))
+            ch2.append(rabiStep*(i+1))
+            if i == num_points - 1:
+                ch2.append(10+acq_time+20)
+            else:
+                ch2.append(10+acq_time + init_time + 10)
+
+            count.append(init_time+20+rabiStep*(i+1))
             count.append(acq_time)
-        ch1.append(0)
-        ch1.append(20)
-        ch2.append(0)
-        ch2.append(20)
+        
         count.append(20)
-            
+        ch1.append(20)
+
+        # print(sum(ch1))
+        # print(sum(ch2))
+        # print(sum(count))
+        # print(ch1)
+        # print(ch2)
         ch3 = [0,0]
         ch4 = [0,0]
         ch5 = [0,0]
@@ -226,6 +243,11 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         self.asg_info_msg.emit('CH2 SUM: ' + str(sum(ch2)))
         self.asg_info_msg.emit('CH1 LEN: ' + str(len(ch1)))
         self.asg_info_msg.emit('CH2 LEN: ' + str(len(ch2)))
+        # print(len(ch1))
+        # print(len(ch2))
+        # print(ch1)
+        # print(ch2)
+        # print(count)
         asg_length = [len(seq) for seq in asg_data]
         rtn = self.asg.download_ASG_pulse_data(asg_data, asg_length)
         if rtn == 1:
@@ -249,19 +271,21 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
     def count_data_thread_func(self):
         pythoncom.CoInitialize()
         rabiStep = int(self.rabi_step_spbx.value())
-        rabiTime = int(self.rabi_time_spbx.value())
+        rabiTime = int(self.rabi_time_spbx.value())*1000
         num_points = int(rabiTime/rabiStep)
         repeat_num = int(self.repeat_spbx.value())
         i_count = int(self.repeat_count_num.value())
         
         self.__stopConstant = False
         while True:
+            # print(1)
             rabi_data = self.rabi_data #防止在给i_count赋值的时候self.rabi_data变了
             if self.__stopConstant == True:
                 break
-            if (len(rabi_data) // num_points) != i_count:                
-                self.repeat_count_num.setValue(rabi_data)
-            if i_count >= repeat_num:
+            if len(rabi_data) != i_count:                
+                self.repeat_count_num.setValue(len(rabi_data))
+            
+            if int(self.repeat_count_num.value()) >= repeat_num:
                 break
             time.sleep(1)
         pythoncom.CoUninitialize()
@@ -320,6 +344,8 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         # self.asg_info_msg.emit(typestr + "datList :" + str(datList)) 
         # print(typestr + "datList :" + str(datList))
         self.rabi_data.append(datList[1:])
+        
+        
 
         return
     '''Set window ui'''
