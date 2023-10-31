@@ -83,24 +83,18 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getSaveFileName(self, 'Choose Data File Path', r"d:", 'CSV Files (*.csv);;All Files (*)', options=options)
-        rabiStart = int(self.rabi_start_spbx.value())
-        rabiStop = int(self.rabi_stop_spbx.value())
         rabiStep = int(self.rabi_step_spbx.value())
-        
-        num_points = int((rabiStop-rabiStart)/rabiStep)+1
-        time_span = np.arrange(rabiStart,rabiStop+rabiStep,rabiStep)
+        rabiTime = int(self.rabi_time_spbx.value())*1000
         intensity_data = self.intensity_data
-        
+        time_span = range(rabiStep,rabiTime+rabiStep,rabiStep)
         df = pd.DataFrame({'Time': time_span, 'Intensity': intensity_data})
         df.to_csv(file_path, index=False, header=True)
     def plot_result(self):
         self.rabi_plot.clear()
-        rabiStart = int(self.rabi_start_spbx.value())
-        rabiStop = int(self.rabi_stop_spbx.value())
         rabiStep = int(self.rabi_step_spbx.value())
-        
-        num_points = int((rabiStop-rabiStart)/rabiStep)+1
-        time_span = np.arrange(rabiStart,rabiStop+rabiStep,rabiStep)
+        rabiTime = int(self.rabi_time_spbx.value())*1000
+        num_points = int(rabiTime/rabiStep)
+        time_span = np.array(range(rabiStep,rabiTime+rabiStep,rabiStep))
         curve = self.rabi_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
 
         rabi_data = np.array(self.rabi_data)
@@ -190,25 +184,21 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         thread.start()
     def set_pulse_and_count(self):
         
-        rabiStart = int(self.rabi_start_spbx.value())
-        rabiStop = int(self.rabi_stop_spbx.value())
         rabiStep = int(self.rabi_step_spbx.value())
-        
-        num_points = int((rabiStop-rabiStart)/rabiStep)+1
-        time_span = np.arrange(rabiStart,rabiStop+rabiStep,rabiStep)
+        rabiTime = int(self.rabi_time_spbx.value())*1000
+        num_points = int(rabiTime/rabiStep)
         init_time = int(self.init_time_spbx.value())*1000
-        acq_time = int(self.acq_time_spbx.value())
-        fore_time = int(self.fore_time_spbx.value())
-        back_time = int(self.back_time_spbx.value())
+        acq_time = int(self.acq_time_spbx.value())*1000
+        
         self.intensity_data = np.zeros(num_points)
         #ASG
         ch1 = [0,20,init_time]
-        ch2 = [0,20+init_time+fore_time]
+        ch2 = [0,20+init_time+25]
         count = [20]
         
         for i in range(num_points):
             
-            ch1.append(fore_time + rabiStep*(i+1)+ back_time)
+            ch1.append(rabiStep*(i+1)+50)
             if i == num_points - 1:
                 ch1.append(acq_time)
             else:
@@ -216,11 +206,11 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
 
             ch2.append(rabiStep*(i+1))
             if i == num_points - 1:
-                ch2.append(back_time+acq_time+20) #20为了与ch1和count补的最后的20低电平对其
+                ch2.append(25+acq_time+20)
             else:
-                ch2.append(back_time+acq_time + init_time + fore_time)
+                ch2.append(25+acq_time + init_time + 25)
 
-            count.append(init_time+fore_time+rabiStep*(i+1)+back_time)
+            count.append(init_time+50+rabiStep*(i+1))
             count.append(acq_time)
         
         count.append(20)
@@ -280,13 +270,9 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         
     def count_data_thread_func(self):
         pythoncom.CoInitialize()
-        rabiStart = int(self.rabi_start_spbx.value())
-        rabiStop = int(self.rabi_stop_spbx.value())
         rabiStep = int(self.rabi_step_spbx.value())
-        
-        num_points = int((rabiStop-rabiStart)/rabiStep)+1
-        time_span = np.arrange(rabiStart,rabiStop+rabiStep,rabiStep)
-        
+        rabiTime = int(self.rabi_time_spbx.value())*1000
+        num_points = int(rabiTime/rabiStep)
         repeat_num = int(self.repeat_spbx.value())
         i_count = int(self.repeat_count_num.value())
         
