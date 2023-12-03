@@ -4,6 +4,7 @@ import pythoncom
 import rabi_ui
 import pandas as pd
 import numpy as np
+import gc
 import pyqtgraph as pg
 from threading import Thread
 from ctypes import *
@@ -49,7 +50,6 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         self.asg_info_ui()
         self.asg_info_msg.connect(self.asg_slot)
         self.m_CountCount = 1
-        self.rabi_data = []
         
 
 
@@ -59,6 +59,7 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         self.plot_ui_init()
         self.data_processing_signal()
         self.data_processing_info_ui()
+        self._intensityData = []
         
     def data_processing_signal(self):
         self.restore_view_btn.clicked.connect(self.restore_view)
@@ -72,49 +73,38 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         )
         # plot signal
         self.plot_data_btn.clicked.connect(self.plot_result)
-        self.repeat_count_num.valueChanged.connect(self.plot_result)
+        self.rabi_count_spbx.valueChanged.connect(self.plot_result)
         self.save_plot_data_btn.clicked.connect(self.save_plot_data)
 
         # clear all signal
         self.clear_repeat_count_btn.clicked.connect(self.clear_repeat_count)
     def clear_repeat_count(self):
-        self.repeat_count_num.setValue(0)
+        self.rabi_count_spbx.setValue(0)
     def save_plot_data(self):
         
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getSaveFileName(self, 'Choose Data File Path', r"d:", 'CSV Files (*.csv);;All Files (*)', options=options)
         rabiStart = int(self.rabi_start_spbx.value())
-        rabiStop = int(self.rabi_stop_spbx.value())
+
         rabiStep = int(self.rabi_step_spbx.value())
+        count = int(self.rabi_count_spbx.value())
         
-        num_points = int((rabiStop-rabiStart)/rabiStep)+1
-        time_span = np.arrange(rabiStart,rabiStop+rabiStep,rabiStep)
-        intensity_data = self.intensity_data
-        
-        df = pd.DataFrame({'Time': time_span, 'Intensity': intensity_data})
+        time_span = range(rabiStart,rabiStart+count*rabiStep,rabiStep)      
+
+        df = pd.DataFrame({'Time': time_span, 'Intensity': self.intensity_data})
         df.to_csv(file_path, index=False, header=True)
     def plot_result(self):
         self.rabi_plot.clear()
         rabiStart = int(self.rabi_start_spbx.value())
         rabiStop = int(self.rabi_stop_spbx.value())
         rabiStep = int(self.rabi_step_spbx.value())
-        
-        num_points = int((rabiStop-rabiStart)/rabiStep)+1
-        time_span = np.arrange(rabiStart,rabiStop+rabiStep,rabiStep)
+        count = int(self.rabi_count_spbx.value())
+
+        time_span = range(rabiStart,rabiStart+count*rabiStep,rabiStep)
         curve = self.rabi_plot.plot(pen=pg.mkPen(color=(255,85,48), width=2))
 
-        rabi_data = np.array(self.rabi_data)
-        
-        num_sublists = int(self.repeat_count_num.value())
-        # sublists = np.array_split(rabi_data[:(num_points * num_sublists)], num_sublists)
-        # print(sublists)
-        self.intensity_data = np.sum(rabi_data[:num_sublists], axis=0)
-        # for i in range(num_sublists):
-        #     # print(np.array(rabi_data[i*num_points:(i+1)*num_points]))
-        #     self.intensity_data += np.array(rabi_data[i*num_points:(i+1)*num_points])
-        # self.intensity_data = list(self.intensity_data)
-        # print(self.intensity_data)
-        
+        self.intensity_data = self._intensityData
+      
         curve.setData(time_span, self.intensity_data)       
         self.intensity_data = np.array(self.intensity_data)
     def data_processing_info_ui(self):
@@ -175,7 +165,6 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         if rtn == 1:
             self.asg_info_msg.emit('Stop success: {}'.format(rtn))
         self.__stopConstant = True
-        self.rabi_data = []
     def asg_start(self):
         rtn = self.asg.start()
         if rtn == 1:
@@ -191,40 +180,26 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
     def set_pulse_and_count(self):
         
         rabiStart = int(self.rabi_start_spbx.value())
+        
         rabiStop = int(self.rabi_stop_spbx.value())
         rabiStep = int(self.rabi_step_spbx.value())
         
         num_points = int((rabiStop-rabiStart)/rabiStep)+1
-        time_span = np.arrange(rabiStart,rabiStop+rabiStep,rabiStep)
+        count = int(self.current_rabi_time_spbx.value())
+
+        mw_time = rabiStart + count*rabiStep
+
         init_time = int(self.init_time_spbx.value())*1000
         acq_time = int(self.acq_time_spbx.value())
         fore_time = int(self.fore_time_spbx.value())
         back_time = int(self.back_time_spbx.value())
-        self.intensity_data = np.zeros(num_points)
+        laser_diff = int(self.laser_diff_time_spbx.value)
+        self.rabi_data = []
         #ASG
-        ch1 = [0,20,init_time]
-        ch2 = [0,20+init_time+fore_time]
-        count = [20]
-        
-        for i in range(num_points):
-            
-            ch1.append(fore_time + rabiStep*(i+1)+ back_time)
-            if i == num_points - 1:
-                ch1.append(acq_time)
-            else:
-                ch1.append(acq_time+init_time)
+        ch1 = [init_time, fore_time+mw_time+back_time, acq_time, laser_diff+20]
+        ch2 = [0, init_time+fore_time, mw_time, back_time+laser_diff+acq_time+20]
+        count = [20, init_time+fore_time+mw_time+back_time+laser_diff-20, acq_time, 20]
 
-            ch2.append(rabiStep*(i+1))
-            if i == num_points - 1:
-                ch2.append(back_time+acq_time+20) #20为了与ch1和count补的最后的20低电平对其
-            else:
-                ch2.append(back_time+acq_time + init_time + fore_time)
-
-            count.append(init_time+fore_time+rabiStep*(i+1)+back_time)
-            count.append(acq_time)
-        
-        count.append(20)
-        ch1.append(20)
 
         # print(sum(ch1))
         # print(sum(ch2))
@@ -288,20 +263,21 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
         time_span = np.arrange(rabiStart,rabiStop+rabiStep,rabiStep)
         
         repeat_num = int(self.repeat_spbx.value())
-        i_count = int(self.repeat_count_num.value())
-        
-        self.__stopConstant = False
+        rabi_count = int(self.rabi_count_spbx.value())
         while True:
             # print(1)
             rabi_data = self.rabi_data #防止在给i_count赋值的时候self.rabi_data变了
-            if self.__stopConstant == True:
+
+            if len(rabi_data) >= repeat_num:     
+                sum = sum(rabi_data[0, repeat_num])    
+                self._intensityData.append(sum)       
+
+                self.current_rabi_time_spbx.setValue(rabi_count+1)
+                del rabi_data, self.rabi_data, sum
+                gc.collect()
+                self.asg_stop()
                 break
-            if len(rabi_data) != i_count:                
-                self.repeat_count_num.setValue(len(rabi_data))
-            
-            if int(self.repeat_count_num.value()) >= repeat_num:
-                break
-            time.sleep(1)
+            time.sleep(0.5)
         pythoncom.CoUninitialize()
     
     def asg_connect(self):
@@ -357,7 +333,7 @@ class MyWindow(rabi_ui.Ui_Form, QWidget):
             typestr = '连续计数 : ' 
         # self.asg_info_msg.emit(typestr + "datList :" + str(datList)) 
         # print(typestr + "datList :" + str(datList))
-        self.rabi_data.append(datList[1:])
+        self.rabi_data.append(datList[1])
         
         
 
